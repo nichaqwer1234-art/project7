@@ -227,7 +227,7 @@
         <div class="w-full max-w-2xl pastel-card p-4 rounded-3xl flex flex-col items-center">
             <span class="text-xs text-purple-400 mb-2 font-semibold flex items-center gap-1.5">
                 <i class="fa-solid fa-clock-rotate-left"></i>
-                ตัวอักษรที่ทายไปแล้ว:
+                ตัวอักษร/สระ/วรรณยุกต์ที่ทายไปแล้ว:
             </span>
             <div id="guessed-history" class="flex flex-wrap justify-center gap-2 min-h-[36px]">
                 <span class="text-xs text-slate-400 italic">ยังไม่ได้พิมพ์ตัวอักษรใดๆ</span>
@@ -335,22 +335,43 @@
             ]
         };
 
-        const consonants = [
-            'ก', 'ข', 'ค', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ญ', 'ฎ', 'ฐ',
-            'ฑ', 'ฒ', 'ณ', 'ด', 'ต', 'ถ', 'ท', 'ธ', 'น', 'บ', 'ป',
-            'ผ', 'ฝ', 'พ', 'ฟ', 'ภ', 'ม', 'ย', 'ร', 'ล', 'ว', 'ศ',
-            'ษ', 'ส', 'ห', 'ฬ', 'อ', 'ฮ'
-        ];
+        // Complete Thai Characters Verification Range (ก-ฮ, สระ, วรรณยุกต์, ตัวการันต์)
+        const thaiCharRegex = /[\u0E01-\u0E3A\u0E40-\u0E4E]/;
 
-        const vowelsAndTones = [
-            'ะ', 'า', 'ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู', 'เ', 'แ', 'โ', 'ใ', 'ไ', 'ำ', '็', 'ั', '์', '่', '้', '๊', '๋'
-        ];
+        // Helper: Split Thai word into distinct Visual Syllable Units / Clusters (Graphemes)
+        function splitThaiClusters(word) {
+            if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                const segmenter = new Intl.Segmenter('th', { granularity: 'grapheme' });
+                return Array.from(segmenter.segment(word), s => s.segment);
+            }
+            // Fallback for grapheme cluster splitting
+            return word.match(/[\u0E01-\u0E2E][\u0E30-\u0E4E]*/g) || Array.from(word);
+        }
+
+        // Helper: Extract all individual sub-components (Consonants, Vowels, Tones) from a target word
+        function extractAllComponents(word) {
+            const normalized = word.normalize('NFD');
+            const set = new Set();
+            for (let char of normalized) {
+                if (thaiCharRegex.test(char)) {
+                    set.add(char);
+                }
+            }
+            return Array.from(set);
+        }
+
+        // Helper: Check if a visual cluster is fully revealed based on guessed characters/diacritics
+        function isClusterRevealed(cluster, guessedSet) {
+            const parts = Array.from(cluster.normalize('NFD'));
+            return parts.every(p => !thaiCharRegex.test(p) || guessedSet.has(p));
+        }
 
         // --- GAME STATE VARIABLES ---
         let currentCategory = 'all';
         let currentWordObj = null;
         let targetWord = "";
-        let targetCharacters = []; 
+        let targetClusters = []; 
+        let targetComponents = [];
         let guessedLetters = new Set();
         let maxLives = 6;
         let livesLeft = maxLives;
@@ -479,8 +500,12 @@
             nativeInputEl.addEventListener('input', () => {
                 const val = nativeInputEl.value;
                 if (val.length > 0) {
-                    const char = val.charAt(val.length - 1);
-                    handleGuess(char);
+                    const chars = Array.from(val.normalize('NFD'));
+                    chars.forEach(char => {
+                        if (thaiCharRegex.test(char)) {
+                            handleGuess(char);
+                        }
+                    });
                     nativeInputEl.value = ''; 
                 }
             });
@@ -500,10 +525,12 @@
                     nativeInputEl.focus();
                 }
 
-                const char = e.key;
-                if (consonants.includes(char) || vowelsAndTones.includes(char)) {
-                    handleGuess(char);
-                }
+                const keyChars = Array.from(e.key.normalize('NFD'));
+                keyChars.forEach(char => {
+                    if (thaiCharRegex.test(char)) {
+                        handleGuess(char);
+                    }
+                });
             });
 
             nativeInputEl.addEventListener('focus', () => updateInputStatusUI(true));
@@ -541,7 +568,9 @@
             const randomIndex = Math.floor(Math.random() * pool.length);
             currentWordObj = pool[randomIndex];
             targetWord = currentWordObj.word;
-            targetCharacters = Array.from(targetWord);
+            
+            targetClusters = splitThaiClusters(targetWord);
+            targetComponents = extractAllComponents(targetWord);
 
             guessedLetters.clear();
             livesLeft = maxLives;
@@ -561,12 +590,12 @@
         function renderWordBoxes() {
             wordDisplayEl.innerHTML = '';
 
-            targetCharacters.forEach((char) => {
+            targetClusters.forEach((cluster) => {
                 const box = document.createElement('div');
                 box.className = 'w-10 h-12 md:w-12 md:h-14 border-2 border-purple-200 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold bg-white/90 shadow-sm transition-all';
 
-                if (guessedLetters.has(char)) {
-                    box.textContent = char;
+                if (isClusterRevealed(cluster, guessedLetters)) {
+                    box.textContent = cluster;
                     box.classList.add('border-pink-400', 'bg-pink-100/80', 'text-pink-500', 'animate-pop', 'shadow-md');
                 } else {
                     box.textContent = '';
@@ -586,7 +615,7 @@
 
             guessedLetters.forEach(char => {
                 const badge = document.createElement('span');
-                const isCorrect = targetCharacters.includes(char);
+                const isCorrect = targetComponents.includes(char);
 
                 if (isCorrect) {
                     badge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-sm';
@@ -601,13 +630,13 @@
         // Handle Character Guess
         function handleGuess(char) {
             if (isRoundOver || livesLeft <= 0) return;
-            if (!consonants.includes(char) && !vowelsAndTones.includes(char)) return;
+            if (!thaiCharRegex.test(char)) return;
             if (guessedLetters.has(char)) return;
 
             guessedLetters.add(char);
             renderGuessedHistory();
 
-            if (targetCharacters.includes(char)) {
+            if (targetComponents.includes(char)) {
                 playSound('correct');
                 renderWordBoxes();
                 checkWin();
@@ -645,7 +674,7 @@
         function useExtraHint() {
             if (isRoundOver || livesLeft <= 0) return;
 
-            const unrevealed = targetCharacters.filter(c => !guessedLetters.has(c));
+            const unrevealed = targetComponents.filter(c => !guessedLetters.has(c));
             if (unrevealed.length > 0) {
                 score = Math.max(0, score - 10);
                 scoreValEl.textContent = score;
@@ -663,7 +692,7 @@
 
         // Check Win Condition
         function checkWin() {
-            const isWon = targetCharacters.every(char => guessedLetters.has(char));
+            const isWon = targetComponents.every(char => guessedLetters.has(char));
             if (isWon) {
                 isRoundOver = true;
                 playSound('win');
@@ -699,7 +728,7 @@
                 streak = 0;
                 streakValEl.textContent = streak;
 
-                targetCharacters.forEach(c => guessedLetters.add(c));
+                targetComponents.forEach(c => guessedLetters.add(c));
                 renderWordBoxes();
 
                 showResultModal(
