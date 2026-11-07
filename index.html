@@ -392,16 +392,16 @@
                 ['ะ', 'า', 'ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู', 'เ', 'แ', 'โ', 'ใ', 'ไ', '็', '่', '้', '๊', '๋', '์', 'ํ', 'ฺ']
             ]
         };
-
-        // Thai Kedmanee physical key mapping
+        // Thai Kedmanee physical key mapping (Comprehensive full key map)
         const THAI_KEDMANEE_MAP = {
             'q': '0', 'w': 'ำ', 'e': 'ำ', 'r': 'พ', 't': 'ะ', 'y': 'ั', 'u': 'ี', 'i': 'ร', 'o': 'น', 'p': 'ย',
-            'a': 'ฟ', 's': 'ห', 'd': 'ก', 'f': 'ด', 'g': 'เ', 'h': '้', 'j': '่', 'k': 'า', 'l': 'ส',
-            'z': 'ผ', 'x': 'ป', 'c': 'แ', 'v': 'อ', 'b': 'ิ', 'n': 'ื', 'm': 'ท',
-            'Q': '0', 'W': '0', 'E': 'ฎ', 'R': 'ฑ', 'T': 'ธ', 'Y': 'ํ', 'U': '๊', 'I': 'ณ', 'O': 'ฯ', 'P': 'ญ',
-            'A': 'ฤ', 'S': 'ฆ', 'D': 'ฏ', 'F': 'โ', 'G': 'ฌ', 'H': '็', 'J': '๋', 'K': 'ษ', 'L': 'ศ',
-            'Z': '0', 'X': '0', 'C': 'ฉ', 'V': 'ฮ', 'B': 'ฺ', 'N': '์', 'M': 'ฒ',
-            '\\': 'ฃ', '|': 'ฅ'
+            '[': 'บ', ']': 'ล', 'a': 'ฟ', 's': 'ห', 'd': 'ก', 'f': 'ด', 'g': 'เ', 'h': '้', 'j': '่', 'k': 'า',
+            'l': 'ส', ';': 'ว', "'": 'ง', 'z': 'ผ', 'x': 'ป', 'c': 'แ', 'v': 'อ', 'b': 'ิ', 'n': 'ื', 'm': 'ท',
+            ',': 'ม', '.': 'ใ', '/': 'ฝ',
+            'Q': '0', 'W': '"', 'E': 'ฎ', 'R': 'ฑ', 'T': 'ธ', 'Y': 'ํ', 'U': '๊', 'I': 'ณ', 'O': 'ฯ', 'P': 'ญ',
+            '{': 'ฐ', '}': 'ฅ', 'A': 'ฤ', 'S': 'ฆ', 'D': 'ฏ', 'F': 'โ', 'G': 'ฌ', 'H': '็', 'J': '๋', 'K': 'ษ',
+            'L': 'ศ', ':': 'ซ', '"': '', 'Z': '(', 'X': ')', 'C': 'ฉ', 'V': 'ฮ', 'B': 'ฺ', 'N': '์', 'M': 'ฒ',
+            '<': 'ฬ', '>': 'ฃ', '?': '?'
         };
 
         /* ==========================================================================
@@ -710,8 +710,8 @@
 
         /* Physical Keyboard Handling */
         function handlePhysicalKeyDown(e) {
-            // Ignore if modals are open or key repeats
-            if (e.repeat) return;
+            // Ignore if modals are open or key repeats or function keys (F1-F12, Control, Alt, etc.)
+            if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
             
             // Check enter key for next word on result modal
             const resultModal = document.getElementById('result-modal');
@@ -722,6 +722,9 @@
 
             let inputKey = e.key;
 
+            // Ignore non-character action keys (Backspace, Tab, Escape, Arrow keys, etc.)
+            if (inputKey.length > 1) return;
+
             // Map English layout keys to Thai Kedmanee if in Thai language mode
             if (currentLang === 'th') {
                 if (THAI_KEDMANEE_MAP[inputKey]) {
@@ -731,13 +734,15 @@
                 inputKey = inputKey.toUpperCase();
             }
 
-            // Trigger click on matching keyboard button if exists
+            // Trigger visual feedback on matching on-screen key button if it exists
             const keyButton = document.querySelector(`.key-btn[data-key="${inputKey}"]`);
-            if (keyButton && !keyButton.disabled) {
-                keyButton.classList.add('ring-2', 'ring-pastel-purple');
-                setTimeout(() => keyButton.classList.remove('ring-2', 'ring-pastel-purple'), 200);
-                handleGuess(inputKey);
+            if (keyButton) {
+                keyButton.classList.add('ring-2', 'ring-pastel-purple', 'scale-95');
+                setTimeout(() => keyButton.classList.remove('ring-2', 'ring-pastel-purple', 'scale-95'), 200);
             }
+
+            // Process the guess directly regardless of whether the key is present on the on-screen keyboard
+            handleGuess(inputKey);
         }
 
         /* Mascot Expressions */
