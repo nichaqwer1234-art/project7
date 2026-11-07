@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมทายคำศัพท์สุดน่ารัก (Word Guess Master)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pastel: {
+                            pink: '#FFB7B2',
+                            yellow: '#FFE5B4',
+                            green: '#E2F0CB',
+                            blue: '#B5EAD7',
+                            purple: '#C7CEEA',
+                            bg: '#FAF7F2',
+                            dark: '#4A4E69'
+                        }
+                    },
+                    fontFamily: {
+                        kanit: ['Kanit', 'sans-serif'],
+                        fredoka: ['Fredoka', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #F7F5F0;
+            background-image: radial-gradient(#E2D9CC 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Shake animation for wrong guess */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Bounce effect for correct letter reveal */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Keyboard key styling */
+        .key-btn {
+            transition: all 0.15s ease;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .key-btn:active {
+            transform: scale(0.92);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #C7CEEA;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-700 flex flex-col justify-between selection:bg-pastel-pink selection:text-white">
+
+    <!-- Top Navigation Bar -->
+    <header class="max-w-4xl mx-auto w-full p-4 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pastel-pink to-pastel-purple flex items-center justify-center text-white text-xl shadow-md font-bold">
+                <i class="fa-solid font-fredoka">W</i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold font-fredoka tracking-wide text-slate-800 leading-tight">Word Guess Cute</h1>
+                <p class="text-xs text-slate-500 font-medium">เกมทายคำศัพท์แสนสนุก</p>
+            </div>
+        </div>
+
+        <!-- Right Side Controls -->
+        <div class="flex items-center gap-2">
+            <!-- Language Switcher -->
+            <div class="bg-white p-1 rounded-2xl shadow-sm border border-slate-200 flex">
+                <button id="lang-th" onclick="setLanguage('th')" class="px-3 py-1 rounded-xl text-xs font-semibold transition-all bg-pastel-purple text-slate-800 shadow-xs">ไทย</button>
+                <button id="lang-en" onclick="setLanguage('en')" class="px-3 py-1 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800">EN</button>
+            </div>
+
+            <!-- Stats Button -->
+            <button onclick="openModal('stats-modal')" class="w-10 h-10 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all hover:scale-105 active:scale-95">
+                <i class="fa-solid fa-chart-line"></i>
+            </button>
+
+            <!-- Sound Toggle Button -->
+            <button id="sound-toggle" onclick="toggleSound()" class="w-10 h-10 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all hover:scale-105 active:scale-95">
+                <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="max-w-2xl mx-auto w-full px-4 flex-grow flex flex-col justify-center items-center my-2">
+
+        <!-- Scoreboard & Level Header -->
+        <div class="w-full bg-white rounded-3xl p-4 shadow-sm border border-slate-200/80 mb-4 transition-all">
+            <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+                <!-- Category Selector Dropdown -->
+                <div class="relative flex items-center">
+                    <span class="absolute left-3 text-slate-400 text-xs">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </span>
+                    <select id="category-select" onchange="changeCategory(this.value)" class="pl-8 pr-8 py-1.5 bg-pastel-blue/40 border border-pastel-blue text-slate-700 font-semibold text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-purple cursor-pointer appearance-none">
+                        <!-- Options injected dynamically -->
+                    </select>
+                    <span class="absolute right-2.5 text-slate-400 text-xs pointer-events-none">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </span>
+                </div>
+
+                <!-- Score & Streak -->
+                <div class="flex items-center gap-4 text-sm font-semibold">
+                    <div class="flex items-center gap-1.5 text-amber-500">
+                        <i class="fa-solid fa-fire text-amber-500 animate-bounce"></i>
+                        <span>Streak: <span id="streak-count" class="font-bold text-slate-800">0</span></span>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-emerald-600">
+                        <i class="fa-solid fa-star text-emerald-500"></i>
+                        <span>คะแนน: <span id="score-count" class="font-bold text-slate-800">0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hearts / Lives Bar -->
+            <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
+                <div class="text-xs text-slate-400 font-medium">โอกาสที่เหลือ:</div>
+                <div id="hearts-container" class="flex gap-1.5 text-lg text-rose-400">
+                    <!-- Hearts dynamically rendered -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Mascot & Hint Display Box -->
+        <div id="game-card" class="w-full bg-white rounded-3xl p-6 shadow-md border border-slate-200/80 mb-4 flex flex-col items-center relative overflow-hidden transition-all">
+            <!-- Cute Character Graphic (SVG) -->
+            <div class="w-24 h-24 mb-3 relative flex items-center justify-center">
+                <svg id="mascot-svg" class="w-full h-full drop-shadow-md transition-all duration-300" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="42" fill="#FFE5B4"/>
+                    <circle cx="20" cy="20" r="12" fill="#FFB7B2"/>
+                    <circle cx="80" cy="20" r="12" fill="#FFB7B2"/>
+                    <circle cx="20" cy="20" r="7" fill="#FFF"/>
+                    <circle cx="80" cy="20" r="7" fill="#FFF"/>
+                    <circle cx="28" cy="60" r="6" fill="#FFB7B2" opacity="0.6"/>
+                    <circle cx="72" cy="60" r="6" fill="#FFB7B2" opacity="0.6"/>
+                    <g id="mascot-eyes">
+                        <circle cx="36" cy="48" r="5" fill="#4A4E69"/>
+                        <circle cx="64" cy="48" r="5" fill="#4A4E69"/>
+                        <circle cx="38" cy="46" r="1.5" fill="#FFF"/>
+                        <circle cx="66" cy="46" r="1.5" fill="#FFF"/>
+                    </g>
+                    <path id="mascot-mouth" d="M 42 62 Q 50 70 58 62" stroke="#4A4E69" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                </svg>
+            </div>
+
+            <!-- Hint Section -->
+            <div class="w-full bg-slate-50 rounded-2xl p-3 border border-slate-100 mb-6 text-center">
+                <p class="text-xs text-slate-400 font-medium mb-1">คำใบ้ (Hint)</p>
+                <p id="hint-display" class="text-sm font-semibold text-slate-700">-</p>
+            </div>
+
+            <!-- Word Placeholders Container -->
+            <div id="word-container" class="flex flex-wrap justify-center gap-2 max-w-full my-2 min-h-[56px] items-center">
+                <!-- Letters dynamically generated -->
+            </div>
+        </div>
+
+        <!-- Power-ups & Helpers Bar -->
+        <div class="w-full grid grid-cols-2 gap-3 mb-4">
+            <button id="btn-hint" onclick="useHint()" class="bg-gradient-to-r from-amber-100 to-amber-200 hover:from-amber-200 hover:to-amber-300 text-amber-800 font-semibold py-2.5 px-4 rounded-2xl shadow-sm border border-amber-300/50 flex items-center justify-center gap-2 text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-lightbulb text-amber-500"></i>
+                <span>เปิดคำใบ้เพิ่ม (<span id="hint-coins">10</span> 🪙)</span>
+            </button>
+
+            <button id="btn-cut-wrong" onclick="useRemoveWrong()" class="bg-gradient-to-r from-purple-100 to-purple-200 hover:from-purple-200 hover:to-purple-300 text-purple-800 font-semibold py-2.5 px-4 rounded-2xl shadow-sm border border-purple-300/50 flex items-center justify-center gap-2 text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i>
+                <span>ตัดอักษรผิด 1 ตัว (<span id="cut-coins">15</span> 🪙)</span>
+            </button>
+        </div>
+
+        <!-- On-Screen Virtual Keyboard Container -->
+        <div id="keyboard-container" class="w-full bg-white/90 backdrop-blur rounded-3xl p-3 shadow-md border border-slate-200/90 flex flex-col gap-1.5 overflow-x-auto">
+            <!-- Dynamic Keyboard Keys Rendered Here -->
+        </div>
+
+    </main>
+
+    <!-- Bottom Action Bar -->
+    <footer class="max-w-2xl mx-auto w-full p-4 flex justify-between items-center text-xs text-slate-400">
+        <button onclick="skipWord()" class="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition-all shadow-xs flex items-center gap-1.5 active:scale-95">
+            <i class="fa-solid fa-forward"></i> ข้ามคำนี้ (-5 คะแนน)
+        </button>
+        <span>กด Enter เพื่อไปคำถัดไปเมื่อชนะ</span>
+    </footer>
+
+    <!-- STATS MODAL -->
+    <div id="stats-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 transform scale-95 transition-transform duration-200" id="stats-modal-card">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-pastel-purple"></i> สถิติการเล่น
+                </h3>
+                <button onclick="closeModal('stats-modal')" class="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                    <div class="text-2xl font-bold text-slate-800 font-fredoka" id="stat-played">0</div>
+                    <div class="text-xs text-slate-500 font-medium">เล่นทั้งหมด</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                    <div class="text-2xl font-bold text-emerald-600 font-fredoka" id="stat-wins">0</div>
+                    <div class="text-xs text-slate-500 font-medium">ชนะแล้ว</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                    <div class="text-2xl font-bold text-amber-500 font-fredoka" id="stat-winrate">0%</div>
+                    <div class="text-xs text-slate-500 font-medium">อัตราการชนะ</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                    <div class="text-2xl font-bold text-rose-500 font-fredoka" id="stat-max-streak">0</div>
+                    <div class="text-xs text-slate-500 font-medium">Streak สูงสุด</div>
+                </div>
+            </div>
+
+            <button onclick="resetStats()" class="w-full py-2.5 text-xs text-rose-500 hover:bg-rose-50 rounded-xl font-semibold transition-all border border-rose-100">
+                ล้างข้อมูลสถิติ
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER / WIN RESULT MODAL -->
+    <div id="result-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center transform scale-95 transition-transform duration-200" id="result-modal-card">
+            
+            <div id="result-icon-container" class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-3 shadow-inner">
+                <!-- Icon dynamically injected -->
+            </div>
+
+            <h2 id="result-title" class="text-2xl font-bold text-slate-800 mb-1 font-fredoka">ยอดเยี่ยมมาก! 🎉</h2>
+            <p id="result-subtitle" class="text-sm text-slate-500 mb-4">คุณทายคำศัพท์ได้ถูกต้อง</p>
+
+            <!-- Word Reveal Box -->
+            <div class="bg-pastel-blue/30 rounded-2xl p-4 border border-pastel-blue/50 mb-5">
+                <div class="text-xs text-slate-400 font-medium mb-1">คำศัพท์คือ</div>
+                <div id="result-word" class="text-2xl font-bold text-slate-800 tracking-wider font-fredoka">-</div>
+                <div id="result-meaning" class="text-xs text-slate-600 mt-1">หมวดหมู่: <span id="result-category">-</span></div>
+            </div>
+
+            <button id="btn-next-word" onclick="nextWord()" class="w-full py-3.5 bg-gradient-to-r from-pastel-pink to-pastel-purple hover:opacity-95 text-slate-800 font-bold rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2">
+                <span>เล่นคำถัดไป (Enter)</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        /* ==========================================================================
+           1. WORD DATASETS (Thai & English)
+           ========================================================================== */
+        const WORD_DATA = {
+            th: [
+                // สัตว์
+                { word: 'กระรอก', category: 'สัตว์', hint: 'สัตว์ตัวเล็ก หางเป็นพวง ชอบกินถั่วบนต้นไม้' },
+                { word: 'นกเพนกวิน', category: 'สัตว์', hint: 'นกที่บินไม่ได้ อาศัยในเขตหิมะเดินเตาะแตะ' },
+                { word: 'ปลาโลมา', category: 'สัตว์', hint: 'สัตว์เลี้ยงลูกด้วยนมในทะเล ฉลาดและเป็นมิตร' },
+                { word: 'ยีราฟ', category: 'สัตว์', hint: 'สัตว์ตัวสูงที่สุดในโลก มีคอยาว' },
+                { word: 'นกฮูก', category: 'สัตว์', hint: 'นกออกหากินตอนกลางคืน มีดวงตาโต' },
+                { word: 'จระเข้', category: 'สัตว์', hint: 'สัตว์เลื้อยคลานขนาดใหญ่ อาศัยในน้ำมีฟันแหลมคม' },
+
+                // อาหาร
+                { word: 'ส้มตำ', category: 'อาหาร', hint: 'อาหารอีสานยอดฮิต ทำจากมะละกอดินใส่พริก' },
+                { word: 'ผัดไทย', category: 'อาหาร', hint: 'เส้นก๋วยเตี๋ยวผัดซอสครบรส ใส่ถั่วงอกและเต้าหู้' },
+                { word: 'ไอศกรีม', category: 'อาหาร', hint: 'ของหวานรสเย็นฉ่ำ มีหลากหลายรสชาติ' },
+                { word: 'ก๋วยเตี๋ยว', category: 'อาหาร', hint: 'อาหารประเภทเส้น มีทั้งน้ำซุปและแบบแห้ง' },
+                { word: 'ซูชิ', category: 'อาหาร', hint: 'อาหารญี่ปุ่นทำจากข้าวผสมน้ำส้มสายชูและปลาดิบ' },
+                { word: 'ชานมไข่มุก', category: 'อาหาร', hint: 'เครื่องดื่มยอดฮิต ใส่เม็ดแป้งเคี้ยวหนึบ' },
+
+                // สิ่งของ
+                { word: 'นาฬิกา', category: 'สิ่งของ', hint: 'เครื่องมือสำหรับบอกเวลา มีทั้งแบบข้อมือและแขวนผนัง' },
+                { word: 'โทรทัศน์', category: 'สิ่งของ', hint: 'เครื่องใช้ไฟฟ้าสำหรับฉายภาพและเสียงความบันเทิง' },
+                { word: 'พัดลม', category: 'สิ่งของ', hint: 'เครื่องใช้ไฟฟ้าที่หมุนใบพัดเพื่อให้ลมเย็น' },
+                { word: 'โทรศัพท์', category: 'สิ่งของ', hint: 'อุปกรณ์สื่อสารไร้สายที่ทุกคนพกติดตัว' },
+                { word: 'กระเป๋า', category: 'สิ่งของ', hint: 'เครื่องใช้สำหรับใส่สิ่งของเดินทางหรือไปโรงเรียน' },
+                { word: 'แว่นตา', category: 'สิ่งของ', hint: 'อุปกรณ์สวมใส่ช่วยในการมองเห็นหรือกันแดด' },
+
+                // ธรรมชาติ
+                { word: 'น้ำตก', category: 'ธรรมชาติ', hint: 'สายน้ำที่ไหลตกมาจากผาสูงในป่า' },
+                { word: 'ภูเขา', category: 'ธรรมชาติ', hint: 'พื้นที่เนินดินสูงชันตามธรรมชาติ' },
+                { word: 'สายรุ้ง', category: 'ธรรมชาติ', hint: 'แถบสี 7 สีบนท้องฟ้าหลังฝนตก' },
+                { word: 'ก้อนเมฆ', category: 'ธรรมชาติ', hint: 'ไอน้ำรวมตัวกันเป็นกลุ่มก้อนลอยอยู่บนฟ้า' },
+                { word: 'ภูเขาไฟ', category: 'ธรรมชาติ', hint: 'ภูเขาที่สามารถพ่นแมกมาและลาวาออกมาได้' },
+                { word: 'มหาสมุทร', category: 'ธรรมชาติ', hint: 'ผืนน้ำเค็มขนาดใหญ่โตมโหฬารครอบคลุมโลก' },
+
+                // ประเทศ
+                { word: 'ญี่ปุ่น', category: 'ประเทศ', hint: 'ดินแดนซากุระและภูเขาไฟฟูจิ' },
+                { word: 'ฝรั่งเศส', category: 'ประเทศ', hint: 'ประเทศในยุโรป มีหอไอเฟลเป็นสัญลักษณ์' },
+                { word: 'อิตาลี', category: 'ประเทศ', hint: 'ต้นกำเนิดพิซซ่าและสปาเกตตี รูปทรงหุ่นบู้ท' },
+                { word: 'บราซิล', category: 'ประเทศ', hint: 'ประเทศในอเมริกาใต้ ขึ้นชื่อเรื่องฟุตบอลและกาแฟ' },
+                { word: 'เกาหลี', category: 'ประเทศ', hint: 'ดินแดนกิมจิ ซีรีส์ และเพลง K-Pop' },
+                { word: 'แคนาดา', category: 'ประเทศ', hint: 'ประเทศที่มีใบเมเปิ้ลเป็นสัญลักษณ์ประจำชาติ' }
+            ],
+            en: [
+                // Animals
+                { word: 'DOLPHIN', category: 'Animals', hint: 'Intelligent sea mammal that jumps out of water' },
+                { word: 'GIRAFFE', category: 'Animals', hint: 'Tallest mammal with a very long neck' },
+                { word: 'PENGUIN', category: 'Animals', hint: 'Flightless bird living in cold snowy ice' },
+                { word: 'SQUIRREL', category: 'Animals', hint: 'Small rodent with a bushy tail eating nuts' },
+                { word: 'KANGAROO', category: 'Animals', hint: 'Australian mammal that hops and carries baby in pouch' },
+                { word: 'OCTOPUS', category: 'Animals', hint: 'Sea creature with eight flexible arms' },
+
+                // Food
+                { word: 'BURGER', category: 'Food', hint: 'Sandwich with meat patty, cheese and vegetables' },
+                { word: 'PANCAKE', category: 'Food', hint: 'Flat round cake eaten with syrup for breakfast' },
+                { word: 'SPAGHETTI', category: 'Food', hint: 'Italian long pasta served with sauce' },
+                { word: 'AVOCADO', category: 'Food', hint: 'Green creamy fruit with a large pit inside' },
+                { word: 'SANDWICH', category: 'Food', hint: 'Two slices of bread with fillings between them' },
+                { word: 'POPCORN', category: 'Food', hint: 'Snack made from puffed corn kernels eaten at movies' },
+
+                // Objects
+                { word: 'BICYCLE', category: 'Objects', hint: 'Two-wheeled vehicle powered by pedaling' },
+                { word: 'BACKPACK', category: 'Objects', hint: 'Bag carried on the back for school or travel' },
+                { word: 'UMBRELLA', category: 'Objects', hint: 'Portable folding canopy used for protection from rain' },
+                { word: 'CAMERA', category: 'Objects', hint: 'Device used to take photos and record videos' },
+                { word: 'HEADPHONE', category: 'Objects', hint: 'Pair of small speakers worn over ears for listening to music' },
+                { word: 'TELESCOPE', category: 'Objects', hint: 'Optical instrument used to look at stars in outer space' },
+
+                // Nature
+                { word: 'VOLCANO', category: 'Nature', hint: 'Mountain that erupts hot lava and ash' },
+                { word: 'WATERFALL', category: 'Nature', hint: 'Cascade of water falling from a height' },
+                { word: 'LIGHTNING', category: 'Nature', hint: 'Bright flash of electricity in the sky during storm' },
+                { word: 'FOREST', category: 'Nature', hint: 'Large area covered with many trees and wild animals' },
+                { word: 'DESERT', category: 'Nature', hint: 'Dry sandy land with very little rainfall' },
+                { word: 'GLACIER', category: 'Nature', hint: 'Slowly moving mass or river of ice' },
+
+                // Countries
+                { word: 'THAILAND', category: 'Countries', hint: 'Land of smiles in Southeast Asia known for Tom Yum' },
+                { word: 'JAPAN', category: 'Countries', hint: 'Island nation famous for Mount Fuji and Sushi' },
+                { word: 'FRANCE', category: 'Countries', hint: 'European country known for Eiffel Tower' },
+                { word: 'AUSTRALIA', category: 'Countries', hint: 'Country and continent known for Kangaroos' },
+                { word: 'GERMANY', category: 'Countries', hint: 'European country famous for cars and castles' },
+                { word: 'BRAZIL', category: 'Countries', hint: 'Largest South American country famous for Carnival' }
+            ]
+        };
+
+        // Keyboards layouts
+        const KEYBOARDS = {
+            en: [
+                ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+                ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+            ],
+            th: [
+                ['ก', 'ข', 'ฃ', 'ค', 'ฅ', 'ฆ', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ฌ', 'ญ'],
+                ['ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ณ', 'ด', 'ต', 'ถ', 'ท', 'ธ', 'น'],
+                ['บ', 'ป', 'ผ', 'ฝ', 'พ', 'ฟ', 'ภ', 'ม', 'ย', 'ร', 'ล', 'ว'],
+                ['ศ', 'ษ', 'ส', 'ห', 'ฬ', 'อ', 'ฮ'],
+                ['ะ', 'า', 'ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู', 'เ', 'แ', 'โ', 'ใ', 'ไ', '็', '่', '้', '๊', '๋', '์', 'ํ', 'ฺ']
+            ]
+        };
+
+        // Thai Kedmanee physical key mapping
+        const THAI_KEDMANEE_MAP = {
+            'q': '0', 'w': 'ำ', 'e': 'ำ', 'r': 'พ', 't': 'ะ', 'y': 'ั', 'u': 'ี', 'i': 'ร', 'o': 'น', 'p': 'ย',
+            'a': 'ฟ', 's': 'ห', 'd': 'ก', 'f': 'ด', 'g': 'เ', 'h': '้', 'j': '่', 'k': 'า', 'l': 'ส',
+            'z': 'ผ', 'x': 'ป', 'c': 'แ', 'v': 'อ', 'b': 'ิ', 'n': 'ื', 'm': 'ท',
+            'Q': '0', 'W': '0', 'E': 'ฎ', 'R': 'ฑ', 'T': 'ธ', 'Y': 'ํ', 'U': '๊', 'I': 'ณ', 'O': 'ฯ', 'P': 'ญ',
+            'A': 'ฤ', 'S': 'ฆ', 'D': 'ฏ', 'F': 'โ', 'G': 'ฌ', 'H': '็', 'J': '๋', 'K': 'ษ', 'L': 'ศ',
+            'Z': '0', 'X': '0', 'C': 'ฉ', 'V': 'ฮ', 'B': 'ฺ', 'N': '์', 'M': 'ฒ',
+            '\\': 'ฃ', '|': 'ฅ'
+        };
+
+        /* ==========================================================================
+           2. GAME STATE VARIABLES
+           ========================================================================== */
+        let currentLang = 'th';
+        let currentCategory = 'all';
+        let currentWordObj = null;
+        let guessedLetters = new Set();
+        let lives = 6;
+        const MAX_LIVES = 6;
+        let score = 0;
+        let streak = 0;
+        let soundEnabled = true;
+
+        // Statistics
+        let stats = {
+            played: 0,
+            wins: 0,
+            maxStreak: 0
+        };
+
+        // Web Audio Synthesizer
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.15); // E5
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now); // A3
+                osc.frequency.exponentialRampToValueAtTime(130.81, now + 0.25); // C3
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'win') {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const noteOsc = audioCtx.createOscillator();
+                    const noteGain = audioCtx.createGain();
+                    noteOsc.connect(noteGain);
+                    noteGain.connect(audioCtx.destination);
+                    noteOsc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                    noteGain.gain.setValueAtTime(0.2, now + idx * 0.1);
+                    noteGain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.2);
+                    noteOsc.start(now + idx * 0.1);
+                    noteOsc.stop(now + idx * 0.1 + 0.2);
+                });
+            } else if (type === 'gameover') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.4);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
+        /* ==========================================================================
+           3. INITIALIZATION & STORAGE
+           ========================================================================== */
+        window.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            populateCategoryDropdown();
+            startNewGame();
+
+            // Register Physical Keyboard Events
+            window.addEventListener('keydown', handlePhysicalKeyDown);
+        });
+
+        function loadStats() {
+            const saved = localStorage.getItem('word_guess_stats');
+            if (saved) {
+                try {
+                    stats = JSON.parse(saved);
+                } catch(e) {}
+            }
+            updateStatsUI();
+        }
+
+        function saveStats() {
+            localStorage.setItem('word_guess_stats', JSON.stringify(stats));
+            updateStatsUI();
+        }
+
+        function updateStatsUI() {
+            document.getElementById('stat-played').innerText = stats.played;
+            document.getElementById('stat-wins').innerText = stats.wins;
+            const winrate = stats.played > 0 ? Math.round((stats.wins / stats.played) * 100) : 0;
+            document.getElementById('stat-winrate').innerText = winrate + '%';
+            document.getElementById('stat-max-streak').innerText = stats.maxStreak;
+            document.getElementById('streak-count').innerText = streak;
+            document.getElementById('score-count').innerText = score;
+        }
+
+        function resetStats() {
+            stats = { played: 0, wins: 0, maxStreak: 0 };
+            streak = 0;
+            score = 0;
+            saveStats();
+        }
+
+        /* ==========================================================================
+           4. GAME LOGIC & CONTROLLER
+           ========================================================================== */
+        function populateCategoryDropdown() {
+            const select = document.getElementById('category-select');
+            select.innerHTML = '';
+
+            // Default 'All'
+            const optionAll = document.createElement('option');
+            optionAll.value = 'all';
+            optionAll.innerText = currentLang === 'th' ? 'หมวดหมู่: ทั้งหมด' : 'Category: All';
+            select.appendChild(optionAll);
+
+            // Extract unique categories
+            const categories = [...new Set(WORD_DATA[currentLang].map(item => item.category))];
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.innerText = cat;
+                select.appendChild(opt);
+            });
+
+            currentCategory = 'all';
+            select.value = 'all';
+        }
+
+        function changeCategory(catVal) {
+            currentCategory = catVal;
+            startNewGame();
+        }
+
+        function setLanguage(lang) {
+            if (currentLang === lang) return;
+            currentLang = lang;
+
+            // UI Buttons update
+            document.getElementById('lang-th').className = lang === 'th'
+                ? "px-3 py-1 rounded-xl text-xs font-semibold transition-all bg-pastel-purple text-slate-800 shadow-xs"
+                : "px-3 py-1 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800";
+            
+            document.getElementById('lang-en').className = lang === 'en'
+                ? "px-3 py-1 rounded-xl text-xs font-semibold transition-all bg-pastel-purple text-slate-800 shadow-xs"
+                : "px-3 py-1 rounded-xl text-xs font-semibold transition-all text-slate-500 hover:text-slate-800";
+
+            populateCategoryDropdown();
+            startNewGame();
+        }
+
+        function startNewGame() {
+            lives = MAX_LIVES;
+            guessedLetters.clear();
+
+            // Filter dataset by category
+            let pool = WORD_DATA[currentLang];
+            if (currentCategory !== 'all') {
+                pool = pool.filter(item => item.category === currentCategory);
+            }
+
+            // Pick random word
+            currentWordObj = pool[Math.floor(Math.random() * pool.length)];
+
+            // Render components
+            renderHearts();
+            renderWord();
+            renderKeyboard();
+            updateMascot('normal');
+            document.getElementById('hint-display').innerText = currentWordObj.hint;
+
+            // Close result modal if open
+            closeModal('result-modal');
+        }
+
+        function renderHearts() {
+            const container = document.getElementById('hearts-container');
+            container.innerHTML = '';
+            for (let i = 0; i < MAX_LIVES; i++) {
+                const heart = document.createElement('i');
+                if (i < lives) {
+                    heart.className = 'fa-solid fa-heart transition-all scale-100';
+                } else {
+                    heart.className = 'fa-regular fa-heart text-slate-300 scale-90';
+                }
+                container.appendChild(heart);
+            }
+        }
+
+        function renderWord() {
+            const container = document.getElementById('word-container');
+            container.innerHTML = '';
+
+            const word = currentWordObj.word.toUpperCase();
+            
+            for (let char of word) {
+                const box = document.createElement('div');
+                box.className = 'w-10 h-12 sm:w-12 sm:h-14 rounded-2xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center font-bold text-xl sm:text-2xl text-slate-800 shadow-inner font-fredoka transition-all';
+                
+                if (guessedLetters.has(char)) {
+                    box.innerText = char;
+                    box.classList.add('bg-pastel-green/40', 'border-emerald-300', 'animate-pop-in');
+                } else {
+                    box.innerText = '';
+                }
+                container.appendChild(box);
+            }
+        }
+
+        function renderKeyboard() {
+            const container = document.getElementById('keyboard-container');
+            container.innerHTML = '';
+
+            const layout = KEYBOARDS[currentLang];
+
+            layout.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'flex justify-center gap-1 sm:gap-1.5 w-full';
+
+                row.forEach(key => {
+                    const btn = document.createElement('button');
+                    btn.setAttribute('data-key', key);
+                    btn.innerText = key;
+                    btn.onclick = () => handleGuess(key);
+
+                    // Styling based on state
+                    if (guessedLetters.has(key)) {
+                        const wordUpper = currentWordObj.word.toUpperCase();
+                        if (wordUpper.includes(key)) {
+                            btn.className = 'key-btn flex-1 py-2 rounded-xl bg-emerald-400 text-white font-bold text-sm sm:text-base shadow-sm opacity-90 cursor-default';
+                        } else {
+                            btn.className = 'key-btn flex-1 py-2 rounded-xl bg-slate-200 text-slate-400 font-semibold text-sm sm:text-base cursor-default opacity-50';
+                            btn.disabled = true;
+                        }
+                    } else {
+                        btn.className = 'key-btn flex-1 py-2 rounded-xl bg-slate-100 hover:bg-pastel-purple/50 text-slate-700 font-semibold text-sm sm:text-base shadow-xs hover:shadow-sm active:scale-95';
+                    }
+
+                    rowDiv.appendChild(btn);
+                });
+
+                container.appendChild(rowDiv);
+            });
+        }
+
+        function handleGuess(letter) {
+            letter = letter.toUpperCase();
+            if (guessedLetters.has(letter) || lives <= 0) return;
+
+            guessedLetters.add(letter);
+            const wordUpper = currentWordObj.word.toUpperCase();
+
+            if (wordUpper.includes(letter)) {
+                // Correct
+                playSound('correct');
+                renderWord();
+                renderKeyboard();
+
+                // Check Win
+                const isWin = [...wordUpper].every(char => guessedLetters.has(char));
+                if (isWin) {
+                    onWinGame();
+                }
+            } else {
+                // Wrong
+                playSound('wrong');
+                lives--;
+                renderHearts();
+                renderKeyboard();
+
+                // Shake Card Animation
+                const card = document.getElementById('game-card');
+                card.classList.add('animate-shake');
+                setTimeout(() => card.classList.remove('animate-shake'), 400);
+
+                updateMascot('sad');
+
+                if (lives <= 0) {
+                    onGameOver();
+                }
+            }
+        }
+
+        /* Physical Keyboard Handling */
+        function handlePhysicalKeyDown(e) {
+            // Ignore if modals are open or key repeats
+            if (e.repeat) return;
+            
+            // Check enter key for next word on result modal
+            const resultModal = document.getElementById('result-modal');
+            if (!resultModal.classList.contains('hidden') && e.key === 'Enter') {
+                nextWord();
+                return;
+            }
+
+            let inputKey = e.key;
+
+            // Map English layout keys to Thai Kedmanee if in Thai language mode
+            if (currentLang === 'th') {
+                if (THAI_KEDMANEE_MAP[inputKey]) {
+                    inputKey = THAI_KEDMANEE_MAP[inputKey];
+                }
+            } else {
+                inputKey = inputKey.toUpperCase();
+            }
+
+            // Trigger click on matching keyboard button if exists
+            const keyButton = document.querySelector(`.key-btn[data-key="${inputKey}"]`);
+            if (keyButton && !keyButton.disabled) {
+                keyButton.classList.add('ring-2', 'ring-pastel-purple');
+                setTimeout(() => keyButton.classList.remove('ring-2', 'ring-pastel-purple'), 200);
+                handleGuess(inputKey);
+            }
+        }
+
+        /* Mascot Expressions */
+        function updateMascot(state) {
+            const eyes = document.getElementById('mascot-eyes');
+            const mouth = document.getElementById('mascot-mouth');
+
+            if (state === 'sad') {
+                eyes.innerHTML = `
+                    <path d="M 32 50 L 40 46" stroke="#4A4E69" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M 68 50 L 60 46" stroke="#4A4E69" stroke-width="3" stroke-linecap="round"/>
+                `;
+                mouth.setAttribute('d', 'M 42 66 Q 50 58 58 66');
+            } else if (state === 'happy') {
+                eyes.innerHTML = `
+                    <circle cx="36" cy="48" r="5" fill="#4A4E69"/>
+                    <circle cx="64" cy="48" r="5" fill="#4A4E69"/>
+                    <circle cx="38" cy="46" r="2" fill="#FFF"/>
+                    <circle cx="66" cy="46" r="2" fill="#FFF"/>
+                `;
+                mouth.setAttribute('d', 'M 40 60 Q 50 74 60 60');
+            } else {
+                eyes.innerHTML = `
+                    <circle cx="36" cy="48" r="5" fill="#4A4E69"/>
+                    <circle cx="64" cy="48" r="5" fill="#4A4E69"/>
+                    <circle cx="38" cy="46" r="1.5" fill="#FFF"/>
+                    <circle cx="66" cy="46" r="1.5" fill="#FFF"/>
+                `;
+                mouth.setAttribute('d', 'M 42 62 Q 50 70 58 62');
+            }
+        }
+
+        /* Power-ups */
+        function useHint() {
+            if (score < 10) {
+                alert('คะแนนของคุณไม่พอ (ต้องการ 10 คะแนน)');
+                return;
+            }
+            score -= 10;
+            updateStatsUI();
+
+            // Reveal 1 correct un-revealed letter
+            const wordUpper = currentWordObj.word.toUpperCase();
+            const unrevealed = [...wordUpper].filter(char => !guessedLetters.has(char));
+            if (unrevealed.length > 0) {
+                const randomChar = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+                handleGuess(randomChar);
+            }
+        }
+
+        function useRemoveWrong() {
+            if (score < 15) {
+                alert('คะแนนของคุณไม่พอ (ต้องการ 15 คะแนน)');
+                return;
+            }
+
+            const wordUpper = currentWordObj.word.toUpperCase();
+            const layout = KEYBOARDS[currentLang].flat();
+            const wrongOptions = layout.filter(key => !wordUpper.includes(key) && !guessedLetters.has(key));
+
+            if (wrongOptions.length > 0) {
+                score -= 15;
+                updateStatsUI();
+                const removeKey = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+                guessedLetters.add(removeKey);
+                renderKeyboard();
+            }
+        }
+
+        function skipWord() {
+            score = Math.max(0, score - 5);
+            updateStatsUI();
+            startNewGame();
+        }
+
+        /* Game Outcomes */
+        function onWinGame() {
+            stats.played++;
+            stats.wins++;
+            streak++;
+            score += 10 + (lives * 2);
+
+            if (streak > stats.maxStreak) {
+                stats.maxStreak = streak;
+            }
+
+            saveStats();
+            playSound('win');
+            updateMascot('happy');
+
+            // Launch Confetti
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            // Show Result Modal
+            document.getElementById('result-icon-container').className = "w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-3 bg-emerald-100 text-emerald-500 shadow-inner";
+            document.getElementById('result-icon-container').innerHTML = '<i class="fa-solid fa-trophy"></i>';
+            document.getElementById('result-title').innerText = 'ยอดเยี่ยมมาก! 🎉';
+            document.getElementById('result-subtitle').innerText = 'คุณทายคำศัพท์ได้ถูกต้อง';
+            document.getElementById('result-word').innerText = currentWordObj.word;
+            document.getElementById('result-category').innerText = currentWordObj.category;
+
+            openModal('result-modal');
+        }
+
+        function onGameOver() {
+            stats.played++;
+            streak = 0;
+            saveStats();
+            playSound('gameover');
+            updateMascot('sad');
+
+            // Show Result Modal
+            document.getElementById('result-icon-container').className = "w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-3 bg-rose-100 text-rose-500 shadow-inner";
+            document.getElementById('result-icon-container').innerHTML = '<i class="fa-solid fa-face-frown"></i>';
+            document.getElementById('result-title').innerText = 'พยายามอีกครั้ง! 💔';
+            document.getElementById('result-subtitle').innerText = 'หมดโอกาสทายแล้ว';
+            document.getElementById('result-word').innerText = currentWordObj.word;
+            document.getElementById('result-category').innerText = currentWordObj.category;
+
+            openModal('result-modal');
+        }
+
+        function nextWord() {
+            closeModal('result-modal');
+            startNewGame();
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+        }
+
+        /* Modal Helpers */
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            const card = document.getElementById(id + '-card');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            const card = document.getElementById(id + '-card');
+            modal.classList.add('opacity-0');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+    </script>
+</body>
+</html>
